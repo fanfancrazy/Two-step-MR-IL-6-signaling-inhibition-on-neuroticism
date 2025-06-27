@@ -4,7 +4,7 @@ library(coloc)
 library(data.table)
 
 # Set working directory
-setwd("E:/fenland验证/共定位")
+setwd("")
 
 # Load pQTL data (exposure dataset)
 df1 <- fread("ATF6B_11387_3.txt.gz", header = TRUE)
