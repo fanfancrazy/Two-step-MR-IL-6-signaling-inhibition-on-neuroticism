@@ -1,44 +1,38 @@
-# Load necessary library
+# === Load necessary libraries ===
 library(TwoSampleMR)
 
-# === Set basic parameters ===
-exposureID <- "ieu-b-35"              # ID for exposure dataset (CRP level)
-outcomeID <- "ebi-a-GCST006940"       # ID for outcome dataset
-geneChr <- 1                          # Chromosome number where IL6R is located
-geneStart <- 154377819                # Start position of IL6R gene
-geneEnd <- 154441926                  # End position of IL6R gene
+# === Set parameters ===
+exposureName <- "CRP Level || IL6R"   # 用于注释
+diseaseName <- "CRP"                  # 用于注释
+outcomeID <- "ebi-a-GCST006940"       # 在线结局ID
+setwd("\\IL6-Neurociticism\\IL6R")      # 修改为你的实际路径
 
-exposureName <- "CRP Level || IL6R"   # Label for exposure in plots/tables
-diseaseName <- "CRP"                  # Label for outcome
-setwd("/IL6-Neurociticism/IL6R")    # Set working directory (modify as needed)
+# === 从 Supplementary 文件读取暴露数据 ===
+exposure_dat <- read_exposure_data(
+  filename = "Supplementary Table2",
+  #filename = "Supplementary Table4",
+  sep = ",",
+  snp_col = "SNP",
+  beta_col = "beta.exposure",
+  se_col = "se.exposure",
+  effect_allele_col = "effect_allele.exposure",
+  other_allele_col = "other_allele.exposure",
+  eaf_col = "eaf.exposure",  # 如无可删去此行
+  pval_col = "pval.exposure",
+  samplesize_col = "samplesize.exposure"  # 如无可删去此行
+)
 
-# === Extract and clump exposure instruments ===
-exposure_dat <- extract_instruments(outcome = exposureID, clump = FALSE)
-exposure_dat <- clump_data(exposure_dat, clump_kb = 100, clump_r2 = 0.3)
+# === 从在线数据库提取结局数据 ===
+outcome_dat <- extract_outcome_data(
+  snps = exposure_dat$SNP,
+  outcomes = outcomeID
+)
 
-# === Filter SNPs within ±100kb of the IL6R gene region and EAF > 0.01 ===
-geneData <- subset(exposure_dat, chr.exposure == geneChr)
-geneData <- subset(geneData, pos.exposure >= (geneStart - 1e5) & pos.exposure <= (geneEnd + 1e5))
-geneData <- subset(geneData, eaf.exposure > 0.01)
-
-# === Calculate F-statistics to assess instrument strength ===
-geneData$R2 <- (2 * geneData$beta.exposure^2 * geneData$eaf.exposure * (1 - geneData$eaf.exposure)) /
-  (2 * geneData$beta.exposure^2 * geneData$eaf.exposure * (1 - geneData$eaf.exposure) +
-     2 * geneData$se.exposure^2 * geneData$samplesize.exposure * geneData$eaf.exposure * (1 - geneData$eaf.exposure))
-
-geneData$F <- geneData$R2 * (geneData$samplesize.exposure - 2) / (1 - geneData$R2)
-
-# === Keep only strong instruments (F > 10) and save to file ===
-filtered_exposure <- subset(geneData, F > 10)
-write.csv(filtered_exposure, file = "IL6R_instruments.csv", row.names = FALSE)
-
-# === Extract outcome data for selected SNPs ===
-outcome_dat <- extract_outcome_data(snps = geneData$SNP, outcomes = outcomeID)
-
-# === Harmonize exposure and outcome data ===
-geneData$exposure <- exposureName
+# === Harmonize ===
+exposure_dat$exposure <- exposureName
 outcome_dat$outcome <- diseaseName
-dat <- harmonise_data(geneData, outcome_dat)
+dat <- harmonise_data(exposure_dat, outcome_dat)
+dat <- dat[dat$pval.outcome > 5e-08,]
 
 # === Keep SNPs suitable for MR analysis and export ===
 outTab <- subset(dat, mr_keep == TRUE)
@@ -82,3 +76,5 @@ dev.off()
 pdf(file = "pic.leaveoneout.pdf", width = 7, height = 5.5)
 mr_leaveoneout_plot(leaveoneout_results = mr_leaveoneout(dat))
 dev.off()
+
+
